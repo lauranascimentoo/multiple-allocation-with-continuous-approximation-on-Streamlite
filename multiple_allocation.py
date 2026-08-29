@@ -1,41 +1,3 @@
-"""Multiple allocation p-hub median, inspirado em Campbell (1996).
-
-Modelagem implementada
-----------------------
-Conjuntos:
-    N = conjunto de nos que podem ser origem, destino e hub.
-
-Parametros:
-    w_ij = fluxo de i para j.
-    C_col_ik = custo unitario de coleta da origem i pelo hub k.
-    C_hub_km = custo unitario de transferencia entre os hubs k e m.
-    C_ent_mj = custo unitario de entrega do hub m ao destino j.
-    p = quantidade de hubs a abrir.
-
-Variaveis:
-    z_k = 1 se o no k e escolhido como hub.
-    x_ijkm = 1 se o fluxo i -> j usa a rota i -> k -> m -> j.
-
-Funcao objetivo:
-    min soma_{i,j,k,m} w_ij *
-        (C_col_ik + C_hub_km + C_ent_mj) * x_ijkm
-
-Restricoes:
-    1. soma_k z_k = p
-       Abre exatamente p hubs.
-
-    2. soma_{k,m} x_ijkm = 1, para todo fluxo i -> j
-       Cada par origem-destino escolhe uma unica rota por hubs.
-
-    3. soma_m x_ijkm <= z_k, para todo i,j,k
-       O no k so pode ser usado como primeiro hub se estiver aberto.
-
-    4. soma_m x_ijmk <= z_k, para todo i,j,k
-       O no k so pode ser usado como segundo hub se estiver aberto.
-
-    5. z_k e x_ijkm binarias.
-"""
-
 import os
 import time
 
@@ -43,7 +5,6 @@ import gurobipy as gp
 from gurobipy import GRB
 
 from utilidades import ExecutionTimeLimitReached, write_execution_log
-
 
 def _solve_multiple_allocation_p_hub(
     nodes,
@@ -204,7 +165,12 @@ def _solve_multiple_allocation_p_hub(
 
     selected_hubs = [k for k in nodes if z[k].X > 0.5]
     selected_routes = {}
+    x_values = {}
 
+    for (i, j, k, m), variable in x.items():
+        if variable.X > 0.5:
+            x_values[(i, j, k, m)] = variable.X
+            
     for (i, j) in flow:
         found_route = False
 
@@ -234,7 +200,7 @@ def _solve_multiple_allocation_p_hub(
     for (i, j), (k, m) in selected_routes.items():
         print(f"{i} -> {j}: {i} -> hub {k} -> hub {m} -> {j}")
 
-    return mdl, selected_hubs, selected_routes
+    return mdl, selected_hubs, selected_routes, x_values
 
 
 def solve_multiple_allocation_p_hub(*args, **kwargs):

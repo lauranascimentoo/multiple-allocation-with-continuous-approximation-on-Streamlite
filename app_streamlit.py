@@ -379,7 +379,7 @@ def run_model(
             }
             if model_name == "multiple_ca":
                 route_c_col, route_c_ent, route_c_hub = data["c_col"], data["c_ent"], data["c_hub"]
-                model, selected_hubs, selected_routes = SOLVERS[model_name](
+                model, selected_hubs, selected_routes, x_values = SOLVERS[model_name](
                     **common_args,
                     c_col=data["c_col"],
                     c_ent=data["c_ent"],
@@ -392,7 +392,7 @@ def run_model(
                     for k in nodes for m in nodes
                 }
                 route_c_ent = {(m, j): NORMAL_C_ENT * distance[(m, j)] for m in nodes for j in nodes}
-                model, selected_hubs, selected_routes = SOLVERS[model_name](
+                model, selected_hubs, selected_routes, x_values = SOLVERS[model_name](
                     **common_args,
                     alpha=normal_alpha,
                 )
@@ -453,6 +453,7 @@ def run_model(
             "route_costs": route_costs,
             "image_path": image_path,
             "elapsed": time.perf_counter() - started,
+            "x_values": x_values,
         }
     except Exception as error:
         return {
