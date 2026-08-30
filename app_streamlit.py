@@ -1,18 +1,9 @@
 """Interface Streamlit para executar os modelos SP."""
 
-import contextlib
-import io
-import os
-import time
 from pathlib import Path
-
+from configs.paths import ROOT_DIR, DATA_DIR
 import streamlit as st
-
-
-ROOT_DIR = Path(__file__).resolve().parent
-DATA_DIR = ROOT_DIR / "data" / "SPdata"
-OUTPUTS_DIR = ROOT_DIR / "outputs"
-
+from utils.run_model import run_model
 from multiple_allocation import solve_multiple_allocation_p_hub
 from multiple_allocation_normal import (
     C_COL as NORMAL_C_COL,
@@ -337,135 +328,6 @@ def financial_segment_analysis(result):
     return rows, total_cost, total_flow
 
 
-def run_model(
-    model_name,
-    instance,
-    n_limit,
-    override_p,
-    c_hub,
-    ca_alpha,
-    normal_alpha,
-    time_limit,
-):
-    os.environ["MPLBACKEND"] = "Agg"
-    os.environ["SP_SKIP_PLOT_SHOW"] = "1"
-    os.makedirs(OUTPUTS_DIR, exist_ok=True)
-
-    previous_cwd = Path.cwd()
-    buffer = io.StringIO()
-    started = time.perf_counter()
-
-    try:
-        os.chdir(ROOT_DIR)
-        data = load_sp_instance(
-            file_path=instance["relative_path"],
-            n_limit=n_limit,
-            override_p=override_p,
-            c_hub=c_hub,
-            alpha=ca_alpha,
-        )
-        nodes, coords, flow, distance, p = (
-            data["nodes"], data["coords"], data["flow"], data["distance"], data["p"]
-        )
-
-        with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
-            common_args = {
-                "nodes": nodes,
-                "flow": flow,
-                "distance": distance,
-                "p": p,
-                "instance_path": instance["relative_path"],
-                "time_limit": time_limit,
-            }
-            if model_name == "multiple_ca":
-                route_c_col, route_c_ent, route_c_hub = data["c_col"], data["c_ent"], data["c_hub"]
-                model, selected_hubs, selected_routes, x_values = SOLVERS[model_name](
-                    **common_args,
-                    c_col=data["c_col"],
-                    c_ent=data["c_ent"],
-                    c_hub=data["c_hub"],
-                )
-            else:
-                route_c_col = {(i, k): NORMAL_C_COL * distance[(i, k)] for i in nodes for k in nodes}
-                route_c_hub = {
-                    (k, m): NORMAL_C_HUB * normal_alpha * distance[(k, m)]
-                    for k in nodes for m in nodes
-                }
-                route_c_ent = {(m, j): NORMAL_C_ENT * distance[(m, j)] for m in nodes for j in nodes}
-                model, selected_hubs, selected_routes, x_values = SOLVERS[model_name](
-                    **common_args,
-                    alpha=normal_alpha,
-                )
-
-            image_path = None
-            if selected_hubs:
-                image_path = OUTPUTS_DIR / f"sp_solution_{model_name}.png"
-                plot_solution(
-                    coords=coords,
-                    flow=flow,
-                    selected_hubs=selected_hubs,
-                    selected_routes=selected_routes,
-                    output_path=str(image_path),
-                    title="Solução SP - 11 regiões",
-                )
-
-        objective = None
-        status = None
-        runtime = None
-
-        if model is not None:
-            status = getattr(model, "Status", None)
-            runtime = getattr(model, "Runtime", None)
-            if getattr(model, "SolCount", 0) > 0:
-                objective = getattr(model, "ObjVal", None)
-
-        route_costs = []
-        for (origin, destination), (first_hub, second_hub) in selected_routes.items():
-            flow_value = flow[(origin, destination)]
-            collection_cost = flow_value * route_c_col[(origin, first_hub)]
-            inter_hub_cost = flow_value * route_c_hub[(first_hub, second_hub)]
-            delivery_cost = flow_value * route_c_ent[(second_hub, destination)]
-            route_costs.append({
-                "origem": origin,
-                "destino": destination,
-                "uso de hubs": "Um hub" if first_hub == second_hub else "Dois hubs",
-                "fluxo": flow_value,
-                "pacotes coleta": flow_value if origin != first_hub else 0,
-                "pacotes inter-hub": flow_value if first_hub != second_hub else 0,
-                "pacotes entrega": flow_value if second_hub != destination else 0,
-                "custo coleta": collection_cost,
-                "custo inter-hub": inter_hub_cost,
-                "custo entrega": delivery_cost,
-                "custo total": collection_cost + inter_hub_cost + delivery_cost,
-            })
-
-        return {
-            "ok": bool(selected_hubs),
-            "log": buffer.getvalue(),
-            "model_status": status,
-            "runtime": runtime,
-            "objective": objective,
-            "gap": getattr(model, "MIPGap", None) if model is not None else None,
-            "num_vars": getattr(model, "NumVars", None) if model is not None else None,
-            "num_constraints": getattr(model, "NumConstrs", None) if model is not None else None,
-            "selected_hubs": selected_hubs,
-            "selected_routes": selected_routes,
-            "route_costs": route_costs,
-            "image_path": image_path,
-            "elapsed": time.perf_counter() - started,
-            "x_values": x_values,
-        }
-    except Exception as error:
-        return {
-            "ok": False,
-            "log": buffer.getvalue(),
-            "error": str(error),
-            "elapsed": time.perf_counter() - started,
-        }
-    finally:
-        os.chdir(previous_cwd)
-
-
 def configure_page():
     st.set_page_config(
         page_title="SP Hub Location",
@@ -602,7 +464,7 @@ def main():
             step=30,
         )
 
-        run_clicked = st.button("Calcular", type="primary", use_container_width=True)
+        run_clicked = st.button("Calcular", type="primary", width='stretch')
 
     estimates = estimate_size(model_name, int(n_limit))
     insights = instance_insights(
@@ -767,14 +629,14 @@ def main():
             ranking_rows = sorted(insights["ranking"], key=lambda row: row[ranking_mode], reverse=ranking_reverse)
             st.dataframe(
                 format_rows(ranking_rows, ["fluxo_enviado", "fluxo_recebido", "fluxo_total", "distancia_media"]),
-                use_container_width=True,
+                width='stretch',
                 hide_index=True,
             )
 
             st.subheader("Figura")
             image_path = result.get("image_path")
             if image_path and Path(image_path).exists():
-                st.image(str(image_path), use_container_width=True)
+                st.image(str(image_path), width='stretch')
             else:
                 st.warning("A figura será exibida quando uma solução viável for encontrada.")
 
@@ -792,7 +654,7 @@ def main():
                         filter_routes(route_rows, selected_origins, selected_destinations, selected_hubs),
                         ["fluxo"],
                     ),
-                    use_container_width=True,
+                    width='stretch',
                     hide_index=True,
                 )
             else:
@@ -873,12 +735,12 @@ def main():
                         "fluxo": format_br(row["fluxo"]),
                         "percentual do fluxo": format_percent_br(row["percentual do fluxo"]),
                     })
-                st.dataframe(formatted_usage, use_container_width=True, hide_index=True)
+                st.dataframe(formatted_usage, width='stretch', hide_index=True)
 
                 st.markdown("#### Fluxo por tipo de trecho")
                 st.dataframe(
                     format_rows(comparison_rows, ["fluxo_total", "maior_fluxo_arco", "fluxo_medio_arco"]),
-                    use_container_width=True,
+                    width='stretch',
                     hide_index=True,
                 )
                 if {"multiple_ca", "multiple_normal"}.issubset(analyses):
@@ -912,14 +774,14 @@ def main():
                         })
 
                     st.markdown("#### Diferença entre os modelos")
-                    st.dataframe(difference_rows, use_container_width=True, hide_index=True)
+                    st.dataframe(difference_rows, width='stretch', hide_index=True)
                     st.caption(
                         "A diferença é calculada como fluxo do modelo com CA menos fluxo do modelo normal. "
                         "Valor positivo indica mais fluxo no modelo com CA; valor negativo indica menos."
                     )
                 for saved_model, arc_rows in analyses.items():
                     with st.expander(f"Fluxos por par de pontos — {model_labels[saved_model]}"):
-                        st.dataframe(format_rows(arc_rows, ["fluxo"]), use_container_width=True, hide_index=True)
+                        st.dataframe(format_rows(arc_rows, ["fluxo"]), width='stretch', hide_index=True)
                 st.markdown(
                     "**Como interpretar:** compare o fluxo total `Inter-hub` com a soma de `Coleta` e "
                     "`Entrega` para avaliar hubs versus hubs–spokes. `maior_fluxo_arco` identifica a "
@@ -987,10 +849,10 @@ def main():
                         })
 
                 st.markdown("#### Resumo financeiro")
-                st.dataframe(summary_financial, use_container_width=True, hide_index=True)
+                st.dataframe(summary_financial, width='stretch', hide_index=True)
 
                 st.markdown("#### Custo por etapa da rota")
-                st.dataframe(segment_financial, use_container_width=True, hide_index=True)
+                st.dataframe(segment_financial, width='stretch', hide_index=True)
 
                 if {"multiple_ca", "multiple_normal"}.issubset(financial_models):
                     ca_financial = financial_models["multiple_ca"]
@@ -1017,7 +879,7 @@ def main():
                             "mais barato": "Com CA" if difference < 0 else "Normal" if difference > 0 else "Mesmo custo",
                         })
                     st.markdown("#### Diferença financeira entre os modelos")
-                    st.dataframe(financial_difference, use_container_width=True, hide_index=True)
+                    st.dataframe(financial_difference, width='stretch', hide_index=True)
                     st.caption(
                         "Diferença negativa significa que o modelo com CA ficou mais barato; "
                         "diferença positiva significa que o modelo normal ficou mais barato."
@@ -1035,7 +897,7 @@ def main():
                         "custo médio por rota (R$)": format_br(row["custo médio por rota"]),
                         "custo por pacote (R$)": format_br(row["custo por pacote"], 6),
                     } for row in hub_cost_rows]
-                    st.dataframe(formatted_costs, use_container_width=True, hide_index=True)
+                    st.dataframe(formatted_costs, width='stretch', hide_index=True)
                     st.caption(
                         "O custo total depende do volume de cada grupo. Para comparar rotas com "
                         "um e dois hubs, observe principalmente o custo por pacote."
@@ -1071,7 +933,7 @@ def main():
                         {"hub": hub, "fluxo_atendido": value}
                         for hub, value in sorted(served.items(), key=lambda item: item[1], reverse=True)
                     ], ["fluxo_atendido"]),
-                    use_container_width=True,
+                    width='stretch',
                     hide_index=True,
                 )
             else:
@@ -1105,7 +967,7 @@ def main():
                 {"grupo": "Inter-hub (usuário)", "parâmetro": "c_hub", "valor": insights["c_hub_per_km"]},
                 {"grupo": "Inter-hub (usuário)", "parâmetro": "alpha", "valor": insights["alpha"]},
             ]
-            st.dataframe(parameter_rows, use_container_width=True, hide_index=True)
+            st.dataframe(parameter_rows, width='stretch', hide_index=True)
 
             def nested_matrix(matrix):
                 return {
@@ -1230,17 +1092,17 @@ def main():
                     st.write("C_col (região × hub)")
                     st.dataframe(
                         {i: {k: format_br(v) for k, v in row.items()} for i, row in C_col.items()},
-                        use_container_width=True,
+                        width='stretch',
                     )
                     st.write("C_ent (hub × região de destino)")
                     st.dataframe(
                         {m: {j: format_br(v) for j, v in row.items()} for m, row in C_ent.items()},
-                        use_container_width=True,
+                        width='stretch',
                     )
                     st.write("C_hub (hub × hub)")
                     st.dataframe(
                         {k: {m: format_br(v) for m, v in row.items()} for k, row in C_hub.items()},
-                        use_container_width=True,
+                        width='stretch',
                     )
                 else:
                     if region_rows:
