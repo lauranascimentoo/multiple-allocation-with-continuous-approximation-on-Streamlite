@@ -136,6 +136,10 @@ def run_model(
             "image_path": image_path,
             "elapsed": time.perf_counter() - started,
             "x_values": x_values,
+
+            "flow": flow,
+            "distance": distance,
+            "params": data["params"],
         }
     except Exception as error:
         return {

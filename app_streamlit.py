@@ -4,24 +4,10 @@ from pathlib import Path
 from configs.paths import ROOT_DIR, DATA_DIR
 import streamlit as st
 from utils.run_model import run_model
-from multiple_allocation import solve_multiple_allocation_p_hub
-from multiple_allocation_normal import (
-    C_COL as NORMAL_C_COL,
-    C_ENT as NORMAL_C_ENT,
-    C_HUB as NORMAL_C_HUB,
-    solve_multiple_allocation_normal,
-)
-from single_allocation import solve_single_allocation_p_hub
-from utilidades import load_sp_instance, plot_solution
+from utilidades import load_sp_instance
+from utils.indicadores_de_comparacao import executar_comparacao
 
 C_HUB = 0.0001878125  # R$/pacote/km
-
-SOLVERS = {
-    "single": solve_single_allocation_p_hub,
-    "multiple_ca": solve_multiple_allocation_p_hub,
-    "multiple_normal": solve_multiple_allocation_normal,
-}
-
 
 def read_instance_metadata(path):
     data = load_sp_instance(path, c_hub=C_HUB, alpha=0.75)
@@ -570,7 +556,7 @@ def main():
 
         tabs = st.tabs([
             "Figura", "Rotas", "Análise de fluxos", "Análise financeira",
-            "Atendimento por hub", "Aproximação contínua", "Log",
+            "Atendimento por hub", "Aproximação contínua", "Log", "Indicadores de comparação"
         ])
 
         with tabs[0]:
@@ -1119,6 +1105,184 @@ def main():
         with tabs[6]:
             st.code(result.get("log") or "Nenhuma saída registrada.", language="text")
 
+
+        with tabs[7]:
+            st.subheader("Indicadores de comparação")
+
+            st.caption(
+                "Comparação entre o modelo Multiple normal e o modelo Multiple com "
+                "aproximação contínua (CA)."
+            )
+
+            current_key = (
+                selected_instance["name"],
+                int(n_limit),
+                int(override_p),
+            )
+
+            comparable = {
+                name: item["result"]
+                for name, item in st.session_state.get("model_results", {}).items()
+                if item.get("comparison_key") == current_key
+                and item.get("result", {}).get("ok")
+            }
+
+            if not {"multiple_normal", "multiple_ca"}.issubset(comparable):
+                st.info(
+                    "Para gerar os indicadores, execute uma vez o Multiple normal "
+                    "e uma vez o Multiple com CA, mantendo a mesma instância e "
+                    "o mesmo número de nós e hubs."
+                )
+            else:
+                solucao_t = comparable["multiple_normal"]
+                solucao_ac = comparable["multiple_ca"]
+
+                with st.spinner("Calculando indicadores de comparação..."):
+                    comparacao = executar_comparacao(
+                        instance=selected_instance,
+                        n_limit=int(n_limit),
+                        override_p=int(override_p),
+                        c_hub=float(ca_c_hub),
+                        ca_alpha=float(ca_alpha),
+                        normal_alpha=float(normal_alpha),
+                        time_limit=int(time_limit),
+                    )
+
+                indicadores = comparacao["indicadores"]
+
+                # ---------------------------------------------------------
+                # Indicador 1 — Hubs comuns
+                # ---------------------------------------------------------
+                st.markdown("### 1. Hubs coincidentes")
+
+                st.metric(
+                    "Hubs em comum",
+                    format_int_br(
+                        indicadores["indicador_1"]["hubs_comuns"]
+                    ),
+                )
+
+                # ---------------------------------------------------------
+                # Indicador 2 — Jaccard
+                # ---------------------------------------------------------
+                st.markdown("### 2. Índice de Jaccard")
+
+                st.metric(
+                    "Jaccard",
+                    format_br(
+                        indicadores["indicador_2"]["jaccard"],
+                        4,
+                    ),
+                )
+
+                # ---------------------------------------------------------
+                # Indicador 3 — Demanda realocada
+                # ---------------------------------------------------------
+                st.markdown("### 3. Demanda realocada")
+
+                col1, col2 = st.columns(2)
+
+                col1.metric(
+                    "Demanda realocada",
+                    f"{format_br(indicadores['indicador_3']['percentual_realocada'], 4)}%",
+                )
+
+                col2.metric(
+                    "Pares origem-destino alterados",
+                    format_int_br(
+                        indicadores["indicador_3"]["pares_alterados"]
+                    ),
+                )
+
+                # ---------------------------------------------------------
+                # Indicador 4 — Distância média de acesso
+                # ---------------------------------------------------------
+                st.markdown("### 4. Distância média de acesso")
+
+                distancia_t = indicadores["indicador_4"]["tradicional"]
+                distancia_ac = indicadores["indicador_4"]["aproximacao_continua"]
+
+                distancia_rows = [
+                    {
+                        "modelo": "Multiple normal",
+                        "distância de coleta": distancia_t["distancia_coleta"],
+                        "distância de entrega": distancia_t["distancia_entrega"],
+                        "distância total": distancia_t["distancia_total"],
+                    },
+                    {
+                        "modelo": "Multiple com CA",
+                        "distância de coleta": distancia_ac["distancia_coleta"],
+                        "distância de entrega": distancia_ac["distancia_entrega"],
+                        "distância total": distancia_ac["distancia_total"],
+                    },
+                ]
+
+                st.dataframe(
+                    format_rows(
+                        distancia_rows,
+                        [
+                            "distância de coleta",
+                            "distância de entrega",
+                            "distância total",
+                        ],
+                    ),
+                    width="stretch",
+                    hide_index=True,
+                )
+
+                # ---------------------------------------------------------
+                # Indicador 5 — Perfil de custos
+                # ---------------------------------------------------------
+                st.markdown("### 5. Perfil de custos")
+
+                custo_t = indicadores["indicador_5"]["tradicional"]
+                custo_ac = indicadores["indicador_5"]["aproximacao_continua"]
+
+                custo_rows = [
+                    {
+                        "modelo": "Multiple normal",
+                        "custo acesso": custo_t["custo_acesso"],
+                        "custo interno": custo_t["custo_interno"],
+                        "custo inter-hub": custo_t["custo_inter_hub"],
+                        "custo total": custo_t["custo_total"],
+                        "custo por pacote": custo_t["custo_por_pacote"],
+                    },
+                    {
+                        "modelo": "Multiple com CA",
+                        "custo acesso": custo_ac["custo_acesso"],
+                        "custo interno": custo_ac["custo_interno"],
+                        "custo inter-hub": custo_ac["custo_inter_hub"],
+                        "custo total": custo_ac["custo_total"],
+                        "custo por pacote": custo_ac["custo_por_pacote"],
+                    },
+                ]
+
+                st.dataframe(
+                    format_rows(
+                        custo_rows,
+                        [
+                            "custo acesso",
+                            "custo interno",
+                            "custo inter-hub",
+                            "custo total",
+                            "custo por pacote",
+                        ],
+                    ),
+                    width="stretch",
+                    hide_index=True,
+                )
+
+                # ---------------------------------------------------------
+                # Indicador 6 — Benefício da solução CA
+                # ---------------------------------------------------------
+                st.markdown("### 6. Benefício da aproximação contínua")
+
+                beneficio = indicadores["indicador_6"]["beneficio_percentual"]
+
+                st.metric(
+                    "Benefício percentual",
+                    f"{format_br(beneficio, 4)}%",
+                )
 
 if __name__ == "__main__":
     main()
