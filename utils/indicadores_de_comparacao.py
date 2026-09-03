@@ -70,7 +70,8 @@ def indicador3_demanda_realocada(x_t, x_ac, flow):
     if soma_w == 0:
         raise ValueError("Soma de flow[(i,j)] é zero; não é possível calcular o percentual de demanda realocada.")
 
-    percentual = 100.0 * 0.5 * sum(dif_por_par.values()) / soma_w
+    soma_ponderada = sum(flow.get((i, j), 0.0) * dif for (i, j), dif in dif_por_par.items())
+    percentual = 100.0 * 0.5 * soma_ponderada / soma_w
     pares_alterados = sum(1 for v in dif_por_par.values() if v > EPS)
     return percentual, pares_alterados
 

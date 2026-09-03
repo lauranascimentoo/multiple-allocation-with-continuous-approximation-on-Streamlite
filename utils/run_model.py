@@ -1,4 +1,4 @@
-import gurobipy as GRB
+from gurobipy import GRB
 import os
 import io
 import time
