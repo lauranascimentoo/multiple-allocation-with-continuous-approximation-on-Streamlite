@@ -1,3 +1,4 @@
+import gurobipy as GRB
 import os
 import io
 import time
@@ -120,9 +121,9 @@ def run_model(
                 "custo entrega": delivery_cost,
                 "custo total": collection_cost + inter_hub_cost + delivery_cost,
             })
-
+        is_optimal = ( model is not None and model.Status == GRB.OPTIMAL and model.SolCount > 0)
         return {
-            "ok": bool(selected_hubs),
+            "ok": is_optimal and bool(selected_hubs),
             "log": buffer.getvalue(),
             "model_status": status,
             "runtime": runtime,
