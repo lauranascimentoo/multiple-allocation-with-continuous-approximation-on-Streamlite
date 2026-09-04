@@ -22,7 +22,7 @@ def _haversine_km(first, second):
     return 6371.0 * 2 * math.atan2(math.sqrt(value), math.sqrt(1 - value))
 
 
-def load_sp_instance(file_path, n_limit=None, override_p=None, c_hub=0.033, alpha=0.75):
+def load_sp_instance(file_path, n_limit=None, override_p=None, alpha=0.75):
     """Le a instancia SP: coordenadas, demanda, custos CA e parametros nomeados."""
     with open(file_path, "r", encoding="utf-8") as file:
         lines = [line.strip() for line in file if line.strip()]
@@ -62,7 +62,7 @@ def load_sp_instance(file_path, n_limit=None, override_p=None, c_hub=0.033, alph
 
     required = {
         "gamma", "T", "rho_col", "Q_col", "beta_col", "c_col",
-        "rho_ent", "Q_ent", "beta_ent", "c_ent",
+        "rho_ent", "Q_ent", "beta_ent", "c_ent", "ckm_hub", "Q_hub", "c_hub",
     }
     missing = sorted(required - params.keys())
     if missing:
@@ -79,8 +79,9 @@ def load_sp_instance(file_path, n_limit=None, override_p=None, c_hub=0.033, alph
     c_col_matrix = {(i, k): original_c_col[(i, k)] for i in nodes for k in nodes}
     c_ent_matrix = {(k, j): original_c_ent[(k, j)] for k in nodes for j in nodes}
     distance = {(i, j): _haversine_km(coords[i], coords[j]) for i in nodes for j in nodes}
+    c_hub = params["c_hub"]
     c_hub_matrix = {
-        (k, m): (0.0 if k == m else float(alpha) * float(c_hub) * distance[(k, m)])
+        (k, m): (0.0 if k == m else float(alpha) * c_hub * distance[(k, m)])
         for k in nodes for m in nodes
     }
 
@@ -95,7 +96,7 @@ def load_sp_instance(file_path, n_limit=None, override_p=None, c_hub=0.033, alph
         "c_ent": c_ent_matrix,
         "c_hub": c_hub_matrix,
         "params": params,
-        "c_hub_per_km": float(c_hub),
+        "c_hub_per_km": params["c_hub"],
         "alpha": float(alpha),
         "original_n": original_n,
     }

@@ -258,9 +258,7 @@ def executar_comparacao(
     instance,
     n_limit,
     override_p,
-    c_hub,
-    ca_alpha,
-    normal_alpha,
+    alpha,
     time_limit,
 ):
     solucao_t = run_model(
@@ -268,9 +266,7 @@ def executar_comparacao(
         instance=instance,
         n_limit=n_limit,
         override_p=override_p,
-        c_hub=c_hub,
-        ca_alpha=ca_alpha,
-        normal_alpha=normal_alpha,
+        alpha= alpha,
         time_limit=time_limit,
     )
 
@@ -279,9 +275,7 @@ def executar_comparacao(
         instance=instance,
         n_limit=n_limit,
         override_p=override_p,
-        c_hub=c_hub,
-        ca_alpha=ca_alpha,
-        normal_alpha=normal_alpha,
+        alpha= alpha,
         time_limit=time_limit,
     )
 
@@ -306,8 +300,8 @@ def executar_comparacao(
         Q=params["Q_col"],
         rho=params["rho_col"],
         beta=params["beta_col"],
-        alpha=normal_alpha,
-        c_hub=c_hub,
+        alpha=alpha,
+        c_hub=params["c_hub"],
         c=params["c_col"],
     )   
     

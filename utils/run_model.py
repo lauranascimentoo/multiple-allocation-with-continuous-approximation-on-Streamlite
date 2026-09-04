@@ -5,17 +5,11 @@ import time
 import contextlib
 from pathlib import Path
 from multiple_allocation import solve_multiple_allocation_p_hub
-from single_allocation import solve_single_allocation_p_hub
 from utilidades import load_sp_instance, plot_solution
 from configs.paths import ROOT_DIR, OUTPUTS_DIR
-from multiple_allocation_normal import (
-    C_COL as NORMAL_C_COL,
-    C_ENT as NORMAL_C_ENT,
-    C_HUB as NORMAL_C_HUB,
-    solve_multiple_allocation_normal,
-)
+from multiple_allocation_normal import solve_multiple_allocation_normal
+
 SOLVERS = {
-    "single": solve_single_allocation_p_hub,
     "multiple_ca": solve_multiple_allocation_p_hub,
     "multiple_normal": solve_multiple_allocation_normal,
 }
@@ -25,9 +19,7 @@ def run_model(
     instance,
     n_limit,
     override_p,
-    c_hub,
-    ca_alpha,
-    normal_alpha,
+    alpha,
     time_limit,
 ):
     os.environ["MPLBACKEND"] = "Agg"
@@ -44,8 +36,7 @@ def run_model(
             file_path=instance["relative_path"],
             n_limit=n_limit,
             override_p=override_p,
-            c_hub=c_hub,
-            alpha=ca_alpha,
+            alpha=alpha,
         )
         nodes, coords, flow, distance, p = (
             data["nodes"], data["coords"], data["flow"], data["distance"], data["p"]
@@ -59,25 +50,35 @@ def run_model(
                 "p": p,
                 "instance_path": instance["relative_path"],
                 "time_limit": time_limit,
+                "alpha": alpha,
             }
             if model_name == "multiple_ca":
                 route_c_col, route_c_ent, route_c_hub = data["c_col"], data["c_ent"], data["c_hub"]
-                model, selected_hubs, selected_routes, x_values = SOLVERS[model_name](
-                    **common_args,
+                model, selected_hubs, selected_routes, x_values = solve_multiple_allocation_p_hub(
+                    nodes=nodes,
+                    flow=flow,
+                    distance=distance,
+                    p=p,
+                    alpha=alpha,
                     c_col=data["c_col"],
                     c_ent=data["c_ent"],
                     c_hub=data["c_hub"],
+                    instance_path=instance["relative_path"],
+                    time_limit=time_limit,
                 )
+                
             else:
-                route_c_col = {(i, k): NORMAL_C_COL * distance[(i, k)] for i in nodes for k in nodes}
-                route_c_hub = {
-                    (k, m): NORMAL_C_HUB * normal_alpha * distance[(k, m)]
-                    for k in nodes for m in nodes
-                }
-                route_c_ent = {(m, j): NORMAL_C_ENT * distance[(m, j)] for m in nodes for j in nodes}
-                model, selected_hubs, selected_routes, x_values = SOLVERS[model_name](
-                    **common_args,
-                    alpha=normal_alpha,
+                route_c_col = data["c_col"]
+                route_c_hub = data["c_hub"]
+                route_c_ent = data["c_ent"]
+                model, selected_hubs, selected_routes, x_values = solve_multiple_allocation_normal(
+                    nodes=nodes,
+                    flow=flow,
+                    distance=distance,
+                    p=p,
+                    alpha=alpha,
+                    instance_path=instance["relative_path"],
+                    time_limit=time_limit,
                 )
 
             image_path = None

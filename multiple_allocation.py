@@ -7,9 +7,10 @@ from gurobipy import GRB
 from utilidades import ExecutionTimeLimitReached, write_execution_log
 
 def _solve_multiple_allocation_p_hub(
+    distance,
     nodes,
     flow,
-    distance,
+    alpha,
     c_col,
     c_ent,
     c_hub,
@@ -135,7 +136,7 @@ def _solve_multiple_allocation_p_hub(
             flow[(i, j)]
             * (
                 c_col[(i, k)]
-                + c_hub[(k, m)]
+                + alpha * c_hub[(k, m)]
                 + c_ent[(m, j)]
             )
         )

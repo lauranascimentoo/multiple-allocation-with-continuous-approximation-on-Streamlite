@@ -7,10 +7,9 @@ from utils.run_model import run_model
 from utilidades import load_sp_instance
 from utils.indicadores_de_comparacao import executar_comparacao
 
-C_HUB = 0.0001878125  # R$/pacote/km
 
 def read_instance_metadata(path):
-    data = load_sp_instance(path, c_hub=C_HUB, alpha=0.75)
+    data = load_sp_instance(path, alpha=0.75)
     return {
         "name": path.name,
         "path": path,
@@ -88,18 +87,17 @@ def estimate_size(model_name, nodes):
     }
 
 
-def load_selected_instance(instance, n_limit, override_p, c_hub=C_HUB, alpha=0.75):
+def load_selected_instance(instance, n_limit, override_p, alpha=0.75):
     return load_sp_instance(
         file_path=instance["relative_path"],
         n_limit=n_limit,
         override_p=override_p,
-        c_hub=c_hub,
         alpha=alpha,
     )
 
 
-def instance_insights(instance, n_limit, override_p, c_hub=C_HUB, alpha=0.75):
-    data = load_selected_instance(instance, n_limit, override_p, c_hub, alpha)
+def instance_insights(instance, n_limit, override_p, alpha=0.75):
+    data = load_selected_instance(instance, n_limit, override_p, alpha)
     nodes = data["nodes"]
     coords = data["coords"]
     flow = data["flow"]
@@ -413,34 +411,14 @@ def main():
             step=1,
         )
 
-        if model_name == "multiple_ca":
-            st.markdown("### Custo inter-hub — CA")
-            hub_cost_col, alpha_col = st.columns(2)
-            with hub_cost_col:
-                ca_c_hub = st.number_input(
-                    "c_hub (R$/pacote/km)",
-                    min_value=0.0,
-                    value=C_HUB,
-                    step=0.001,
-                    format="%.9f",
-                )
-            with alpha_col:
-                ca_alpha = st.number_input(
-                    "Alpha CA", min_value=0.0, max_value=1.0, value=0.75,
-                    step=0.01, format="%.2f",
-                )
-            st.caption("Usa C_col e C_ent da instância e calcula C_hub = alpha × c_hub × distância.")
-            normal_alpha = 0.75
-        else:
-            st.markdown("### Coeficientes do modelo normal")
-            normal_alpha = st.number_input(
-                "Alpha — inter-hub", min_value=0.0, value=0.75, step=0.01, format="%.2f"
-            )
-            st.caption(
-                "Chi = 1 e Delta = 1 (fixos). Usa fluxo × "
-                "(d_ik + alpha·d_km + d_mj) / 1000."
-            )
-            ca_c_hub, ca_alpha = C_HUB, 0.75
+        alpha = st.sidebar.number_input(
+            "Fator Alpha (Desconto de Hub/Transporte)",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.75,
+            step=0.05,
+            help="Parâmetro alpha utilizado por ambos os modelos (Tradicional e CA)."
+)
 
         time_limit = st.number_input(
             "Tempo limite (segundos)",
@@ -454,7 +432,7 @@ def main():
 
     estimates = estimate_size(model_name, int(n_limit))
     insights = instance_insights(
-        selected_instance, int(n_limit), int(override_p), float(ca_c_hub), float(ca_alpha)
+        selected_instance, int(n_limit), int(override_p), float(alpha)
     )
 
     metric_columns = st.columns(3)
@@ -483,9 +461,7 @@ def main():
                 instance=selected_instance,
                 n_limit=int(n_limit),
                 override_p=int(override_p),
-                c_hub=float(ca_c_hub),
-                ca_alpha=float(ca_alpha),
-                normal_alpha=float(normal_alpha),
+                alpha=float(alpha),
                 time_limit=int(time_limit),
             )
         st.session_state["last_result"] = result
@@ -494,8 +470,7 @@ def main():
             "instance": selected_instance["name"],
             "n_limit": int(n_limit),
             "override_p": int(override_p),
-            "c_hub": float(ca_c_hub),
-            "alpha": float(ca_alpha),
+            "alpha": float(alpha),
             "time_limit": int(time_limit),
         }
         comparison_key = (
@@ -1142,9 +1117,7 @@ def main():
                         instance=selected_instance,
                         n_limit=int(n_limit),
                         override_p=int(override_p),
-                        c_hub=float(ca_c_hub),
-                        ca_alpha=float(ca_alpha),
-                        normal_alpha=float(normal_alpha),
+                        alpha=float(alpha),
                         time_limit=int(time_limit),
                     )
 
