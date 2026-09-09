@@ -50,8 +50,15 @@ def load_sp_instance(file_path, n_limit=None, override_p=None, alpha=0.75):
         return matrix
 
     original_flow_matrix = read_matrix()
+
     original_c_col = read_matrix()
     original_c_ent = read_matrix()
+    original_c_acesso_col = read_matrix()
+    original_c_acesso_ent = read_matrix()
+    original_c_interno_col = read_matrix()
+    original_c_interno_ent = read_matrix()
+    
+    
 
     params = {}
     for line in lines[cursor:]:
@@ -93,7 +100,11 @@ def load_sp_instance(file_path, n_limit=None, override_p=None, alpha=0.75):
         "distance": distance,
         "p": p,
         "c_col": c_col_matrix,
+        "c_interno_col": original_c_interno_col,
+        "c_acesso_col": original_c_acesso_col,
         "c_ent": c_ent_matrix,
+        "c_interno_ent": original_c_interno_ent,
+        "c_acesso_ent": original_c_acesso_ent,
         "c_hub": c_hub_matrix,
         "params": params,
         "c_hub_per_km": params["c_hub"],

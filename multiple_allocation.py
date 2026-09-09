@@ -209,4 +209,4 @@ def solve_multiple_allocation_p_hub(*args, **kwargs):
         return _solve_multiple_allocation_p_hub(*args, **kwargs)
     except ExecutionTimeLimitReached as error:
         print(f"\n{error}")
-        return None, [], {}
+        return None, [], {}, {}
