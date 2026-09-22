@@ -254,36 +254,15 @@ def comparar_solucoes(solucao_t, solucao_ac, flow, distance, Ai, Q, rho, beta, a
         },
     }
 
-def executar_comparacao(
-    instance,
-    n_limit,
-    override_p,
-    alpha,
-    time_limit,
-):
-    solucao_t = run_model(
-        model_name="multiple_normal",
-        instance=instance,
-        n_limit=n_limit,
-        override_p=override_p,
-        alpha= alpha,
-        time_limit=time_limit,
-    )
-
-    solucao_ac = run_model(
-        model_name="multiple_ca",
-        instance=instance,
-        n_limit=n_limit,
-        override_p=override_p,
-        alpha= alpha,
-        time_limit=time_limit,
-    )
+def executar_comparacao(solucao_t, solucao_ac, alpha):
+    
+    _validar_solucao(solucao_t, "tradicional")
+    _validar_solucao(solucao_ac, "aproximacao_continua")
 
     if not solucao_t.get("ok"):
         raise ValueError(
             "O modelo Multiple normal não encontrou uma solução válida."
         )
-
     if not solucao_ac.get("ok"):
         raise ValueError(
             "O modelo Multiple com CA não encontrou uma solução válida."
@@ -291,7 +270,7 @@ def executar_comparacao(
 
     params = solucao_t["params"]
 
-    indicadores = comparar_solucoes(
+    return comparar_solucoes(
         solucao_t=solucao_t,
         solucao_ac=solucao_ac,
         flow=solucao_t["flow"],
@@ -303,11 +282,6 @@ def executar_comparacao(
         alpha=alpha,
         c_hub=params["c_hub"],
         c=params["c_col"],
-    )   
-    
-    return {
-        "tradicional": solucao_t,
-        "aproximacao_continua": solucao_ac,
-        "indicadores": indicadores,
-    }
+    )
+
 

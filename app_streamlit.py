@@ -1114,14 +1114,12 @@ def main():
 
                 with st.spinner("Calculando indicadores de comparação..."):
                     comparacao = executar_comparacao(
-                        instance=selected_instance,
-                        n_limit=int(n_limit),
-                        override_p=int(override_p),
-                        alpha=float(alpha),
-                        time_limit=int(time_limit),
+                        solucao_t,
+                        solucao_ac,
+                        alpha=insights["alpha"]
                     )
 
-                indicadores = comparacao["indicadores"]
+                indicadores = comparacao
 
                 # ---------------------------------------------------------
                 # Indicador 1 — Hubs comuns
