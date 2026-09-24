@@ -138,7 +138,10 @@ def run_model(
             "image_path": image_path,
             "elapsed": time.perf_counter() - started,
             "x_values": x_values,
-
+            "d_acesso_col": data["d_acesso_col"],
+            "d_acesso_ent": data["d_acesso_ent"],
+            "d_interno_col": data["d_interno_col"],
+            "d_interno_ent": data["d_interno_ent"],
             "flow": flow,
             "distance": distance,
             "params": data["params"],

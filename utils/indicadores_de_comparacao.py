@@ -1,23 +1,8 @@
-import math
-from .run_model import run_model
 EPS = 1e-9
 
 # ---------------------------------------------------------------------------
 # Validação
 # ---------------------------------------------------------------------------
-Ai = {
-    1: 2417.34,
-    2: 1888.20,
-    3: 992.14,
-    4: 670.64,
-    5: 591.96,
-    6: 472.49,
-    7: 425.36,
-    8: 335.45,
-    9: 303.98,
-    10: 265.11,
-    11: 221.46,
-}
 
 def _validar_solucao(solucao, nome):
     for campo in ("selected_hubs", "x_values"):
@@ -115,48 +100,6 @@ def _oi_dj(flow):
         Dj[j] = Dj.get(j, 0.0) + w
     return Oi, Dj
 
-
-def _custo_acesso(x_values, flow, distance, Q, c, Oi, Dj):
-    """Eq. 12, com Ri/Rj = ceil(Oi/Q), ceil(Dj/Q) (eq. 11)."""
-    total = 0.0
-    ri_cache, rj_cache = {}, {}
-    for (i, j, k, m), xijkm in x_values.items():
-        oi, dj = Oi.get(i, 0.0), Dj.get(j, 0.0)
-        if oi == 0 or dj == 0:
-            continue  # sem volume de origem/destino: sem custo de acesso associado
-        wij = flow.get((i, j))
-        if wij is None:
-            raise ValueError(f"flow[{(i, j)}] ausente; necessário para o custo de acesso.")
-        d_ik = distance.get((i, k))
-        d_mj = distance.get((m, j))
-        if d_ik is None or d_mj is None:
-            raise ValueError(f"distance ausente para ({i},{k}) ou ({m},{j}); necessário para o custo de acesso.")
-        if i not in ri_cache:
-            ri_cache[i] = math.ceil(oi / Q)
-        if j not in rj_cache:
-            rj_cache[j] = math.ceil(dj / Q)
-        total += wij * xijkm * c * (2 * d_ik * ri_cache[i] / oi + 2 * d_mj * rj_cache[j] / dj)
-    return total
-
-
-def _custo_interno(x_values, flow, Ai, rho, beta, c, Oi, Dj):
-    """Eq. 14, com Ni = Oi/rho, Nj = Dj/rho (eq. 13)."""
-    total = 0.0
-    for (i, j, k, m), xijkm in x_values.items():
-        oi, dj = Oi.get(i, 0.0), Dj.get(j, 0.0)
-        if oi == 0 or dj == 0:
-            continue
-        wij = flow.get((i, j))
-        if wij is None:
-            raise ValueError(f"flow[{(i, j)}] ausente; necessário para o custo interno.")
-        ai, aj = Ai.get(i), Ai.get(j)
-        if ai is None or aj is None:
-            raise ValueError(f"Ai ausente para a região {i} ou {j}; necessário para o custo interno.")
-        Ni, Nj = oi / rho, dj / rho
-        total += wij * xijkm * c * (beta * math.sqrt(ai * Ni) / oi + beta * math.sqrt(aj * Nj) / dj)
-    return total
-
-
 def _custo_inter_hub(x_values, flow, distance, alpha, c_hub):
     """Eq. 15, com Chub_km = c_hub * d_km (eq. 16)."""
     total = 0.0
@@ -170,12 +113,49 @@ def _custo_inter_hub(x_values, flow, distance, alpha, c_hub):
         total += wij * xijkm * alpha * (c_hub * d_km)
     return total
 
+def _custo_acesso(x_values, flow, d_acesso_col, d_acesso_ent, c, Oi, Dj):
+    """Eq. 12. d_acesso_col[(i,k)] e d_acesso_ent[(m,j)] já vêm com
+    2*d*R embutido (calculado no pipeline de geração da instância),
+    então NÃO multiplicar por 2 de novo aqui."""
+    total = 0.0
+    for (i, j, k, m), xijkm in x_values.items():
+        oi, dj = Oi.get(i, 0.0), Dj.get(j, 0.0)
+        if oi == 0 or dj == 0:
+            continue
+        wij = flow.get((i, j))
+        if wij is None:
+            raise ValueError(f"flow[{(i, j)}] ausente; necessário para o custo de acesso.")
+        d_ik = d_acesso_col.get((i, k))
+        d_mj = d_acesso_ent.get((m, j))
+        if d_ik is None or d_mj is None:
+            raise ValueError(f"d_acesso ausente para ({i},{k}) ou ({m},{j}); necessário para o custo de acesso.")
+        total += wij * xijkm * c * (d_ik / oi + d_mj / dj)
+    return total
 
-def indicador5_perfil_custos(x_values, flow, distance, Ai, Q, rho, beta, alpha, c_hub, c):
-    """CAC(S) = Cacesso(S) + Cinterno(S) + Chub(S) (eq. 9)."""
+
+def _custo_interno(x_values, flow, d_interno_col, d_interno_ent, c, Oi, Dj):
+    """Eq. 14. d_interno_col[i] / d_interno_ent[j] já vêm com β√(A·N) embutido."""
+    total = 0.0
+    for (i, j, k, m), xijkm in x_values.items():
+        oi, dj = Oi.get(i, 0.0), Dj.get(j, 0.0)
+        if oi == 0 or dj == 0:
+            continue
+        d_i = d_interno_col.get(i)
+        d_j = d_interno_ent.get(j)
+        if d_i is None or d_j is None:
+            raise ValueError(f"d_interno ausente para a região {i} ou {j}; necessário para o custo interno.")
+        wij = flow.get((i, j))
+        if wij is None:
+            raise ValueError(f"flow[{(i, j)}] ausente; necessário para o custo interno.")
+        total += wij * xijkm * c * (d_i / oi + d_j / dj)
+    return total
+
+
+def indicador5_perfil_custos(x_values, flow, distance, alpha, c_hub, c,
+                              d_acesso_col, d_acesso_ent, d_interno_col, d_interno_ent):
     Oi, Dj = _oi_dj(flow)
-    custo_acesso = _custo_acesso(x_values, flow, distance, Q, c, Oi, Dj)
-    custo_interno = _custo_interno(x_values, flow, Ai, rho, beta, c, Oi, Dj)
+    custo_acesso = _custo_acesso(x_values, flow, d_acesso_col, d_acesso_ent, c, Oi, Dj)
+    custo_interno = _custo_interno(x_values, flow, d_interno_col, d_interno_ent, c, Oi, Dj)
     custo_inter_hub = _custo_inter_hub(x_values, flow, distance, alpha, c_hub)
     custo_total = custo_acesso + custo_interno + custo_inter_hub
 
@@ -191,7 +171,6 @@ def indicador5_perfil_custos(x_values, flow, distance, Ai, Q, rho, beta, alpha, 
         "custo_por_pacote": custo_total / soma_w,
     }
 
-
 # ---------------------------------------------------------------------------
 # Indicador 6 — benefício da solução AC (eq. 18)
 # ---------------------------------------------------------------------------
@@ -206,66 +185,56 @@ def indicador6_beneficio(cac_t, cac_ac):
 # Função principal
 # ---------------------------------------------------------------------------
 
-def comparar_solucoes(solucao_t, solucao_ac, flow, distance, Ai, Q, rho, beta, alpha, c_hub, c):
-    """
-    Parâmetros
-    ----------
-    solucao_t, solucao_ac : dict
-        Dicionários de saída do solver para o modelo tradicional e para o
-        modelo com aproximação contínua (devem conter ao menos "selected_hubs"
-        e "x_values").
-    flow : dict {(i, j): w_ij}
-    distance : dict {(a, b): d_ab}
-    Ai : dict {regiao: area}
-    Q, rho, beta, alpha, c_hub : parâmetros da instância (eq. 11, 13, 15/16).
-    c : custo unitário de transporte usado nas eq. 12 e 14 (não estava entre
-        os dados originalmente listados; deve ser localizado no projeto).
-    """
+
+def comparar_solucoes(solucao_t, solucao_ac, flow, distance,
+                       d_acesso_col, d_acesso_ent, d_interno_col, d_interno_ent,
+                       alpha, c_hub, c):
     _validar_solucao(solucao_t, "tradicional")
     _validar_solucao(solucao_ac, "aproximacao_continua")
-    _validar_obrigatorios(flow=flow, distance=distance, Ai=Ai, Q=Q, rho=rho,
-                          beta=beta, alpha=alpha, c_hub=c_hub, c=c)
+    _validar_obrigatorios(
+        flow=flow, distance=distance,
+        d_acesso_col=d_acesso_col, d_acesso_ent=d_acesso_ent,
+        d_interno_col=d_interno_col, d_interno_ent=d_interno_ent,
+        alpha=alpha, c_hub=c_hub, c=c,
+    )
 
     hubs_t, hubs_ac = solucao_t["selected_hubs"], solucao_ac["selected_hubs"]
     x_t, x_ac = solucao_t["x_values"], solucao_ac["x_values"]
 
     percentual_realocada, pares_alterados = indicador3_demanda_realocada(x_t, x_ac, flow)
 
-    perfil_t = indicador5_perfil_custos(x_t, flow, distance, Ai, Q, rho, beta, alpha, c_hub, c)
-    perfil_ac = indicador5_perfil_custos(x_ac, flow, distance, Ai, Q, rho, beta, alpha, c_hub, c)
+    perfil_t = indicador5_perfil_custos(x_t, flow, distance, alpha, c_hub, c,
+                                         d_acesso_col, d_acesso_ent, d_interno_col, d_interno_ent)
+    perfil_ac = indicador5_perfil_custos(x_ac, flow, distance, alpha, c_hub, c,
+                                          d_acesso_col, d_acesso_ent, d_interno_col, d_interno_ent)
 
     return {
         "indicador_1": {"hubs_comuns": indicador1_hubs_comuns(hubs_t, hubs_ac)},
         "indicador_2": {"jaccard": indicador2_jaccard(hubs_t, hubs_ac)},
-        "indicador_3": {
-            "percentual_realocada": percentual_realocada,
-            "pares_alterados": pares_alterados,
-        },
+        "indicador_3": {"percentual_realocada": percentual_realocada, "pares_alterados": pares_alterados},
         "indicador_4": {
             "tradicional": indicador4_distancia_acesso(x_t, flow, distance),
             "aproximacao_continua": indicador4_distancia_acesso(x_ac, flow, distance),
         },
-        "indicador_5": {
-            "tradicional": perfil_t,
-            "aproximacao_continua": perfil_ac,
-        },
+        "indicador_5": {"tradicional": perfil_t, "aproximacao_continua": perfil_ac},
         "indicador_6": {
             "beneficio_percentual": indicador6_beneficio(perfil_t["custo_total"], perfil_ac["custo_total"])
         },
     }
 
+
 def executar_comparacao(solucao_t, solucao_ac, alpha):
-    
     _validar_solucao(solucao_t, "tradicional")
     _validar_solucao(solucao_ac, "aproximacao_continua")
 
     if not solucao_t.get("ok"):
-        raise ValueError(
-            "O modelo Multiple normal não encontrou uma solução válida."
-        )
+        raise ValueError("O modelo Multiple normal não encontrou uma solução válida.")
     if not solucao_ac.get("ok"):
+        raise ValueError("O modelo Multiple com CA não encontrou uma solução válida.")
+    if solucao_t["params"] != solucao_ac["params"]:
         raise ValueError(
-            "O modelo Multiple com CA não encontrou uma solução válida."
+            "Os parâmetros das duas soluções não coincidem. "
+            "Não é possível comparar soluções de instâncias diferentes."
         )
 
     params = solucao_t["params"]
@@ -273,15 +242,13 @@ def executar_comparacao(solucao_t, solucao_ac, alpha):
     return comparar_solucoes(
         solucao_t=solucao_t,
         solucao_ac=solucao_ac,
-        flow=solucao_t["flow"],
-        distance=solucao_t["distance"],
-        Ai=Ai,
-        Q=params["Q_col"],
-        rho=params["rho_col"],
-        beta=params["beta_col"],
+        flow=solucao_t["flow"],           # <- vem da raiz do dict, não de params
+        distance=solucao_t["distance"],   # <- idem
+        d_acesso_col=solucao_t["d_acesso_col"],
+        d_acesso_ent=solucao_t["d_acesso_ent"],
+        d_interno_col=solucao_t["d_interno_col"],
+        d_interno_ent=solucao_t["d_interno_ent"],
         alpha=alpha,
-        c_hub=params["c_hub"],
-        c=params["c_col"],
+        c_hub=params["c_hub"],   
+        c=params["c_col"],          
     )
-
-

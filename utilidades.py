@@ -53,10 +53,10 @@ def load_sp_instance(file_path, n_limit=None, override_p=None, alpha=0.75):
 
     original_c_col = read_matrix()
     original_c_ent = read_matrix()
-    original_c_acesso_col = read_matrix()
-    original_c_acesso_ent = read_matrix()
-    original_c_interno_col = read_matrix()
-    original_c_interno_ent = read_matrix()
+    original_d_acesso_col = read_matrix()
+    original_d_acesso_ent = read_matrix()
+    original_d_interno_col = read_matrix()
+    original_d_interno_ent = read_matrix()
     
     
 
@@ -85,6 +85,13 @@ def load_sp_instance(file_path, n_limit=None, override_p=None, alpha=0.75):
     }
     c_col_matrix = {(i, k): original_c_col[(i, k)] for i in nodes for k in nodes}
     c_ent_matrix = {(k, j): original_c_ent[(k, j)] for k in nodes for j in nodes}
+
+    d_acesso_col_matrix = {(i, k): original_d_acesso_col[(i, k)] for i in nodes for k in nodes}
+    d_acesso_ent_matrix = {(k, j): original_d_acesso_ent[(k, j)] for k in nodes for j in nodes}
+
+    d_interno_col_por_regiao = {i: original_d_interno_col[(i, i)] for i in nodes}
+    d_interno_ent_por_regiao = {j: original_d_interno_ent[(j, j)] for j in nodes}
+
     distance = {(i, j): _haversine_km(coords[i], coords[j]) for i in nodes for j in nodes}
     c_hub = params["c_hub"]
     c_hub_matrix = {
@@ -93,6 +100,7 @@ def load_sp_instance(file_path, n_limit=None, override_p=None, alpha=0.75):
     }
 
     p = min(int(override_p) if override_p is not None else 5, n)
+    
     return {
         "nodes": nodes,
         "coords": coords,
@@ -100,11 +108,11 @@ def load_sp_instance(file_path, n_limit=None, override_p=None, alpha=0.75):
         "distance": distance,
         "p": p,
         "c_col": c_col_matrix,
-        "c_interno_col": original_c_interno_col,
-        "c_acesso_col": original_c_acesso_col,
         "c_ent": c_ent_matrix,
-        "c_interno_ent": original_c_interno_ent,
-        "c_acesso_ent": original_c_acesso_ent,
+        "d_interno_col": d_interno_col_por_regiao,
+        "d_acesso_col": d_acesso_col_matrix,
+        "d_interno_ent": d_interno_ent_por_regiao,
+        "d_acesso_ent": d_acesso_ent_matrix,
         "c_hub": c_hub_matrix,
         "params": params,
         "c_hub_per_km": params["c_hub"],
