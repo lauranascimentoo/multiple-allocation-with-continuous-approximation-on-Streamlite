@@ -136,8 +136,9 @@ def _solve_multiple_allocation_p_hub(
             flow[(i, j)]
             * (
                 c_col[(i, k)]
-                + alpha * c_hub[(k, m)]
-                + c_ent[(m, j)]
+                #sem o alpha
+              + c_hub[(k, m)]
+              + c_ent[(m, j)]
             )
         )
         objective.addTerms(coefficient, variable)
