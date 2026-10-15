@@ -5,7 +5,7 @@ EPS = 1e-9
 # ---------------------------------------------------------------------------
 
 def _validar_solucao(solucao, nome):
-    for campo in ("selected_hubs", "x_values"):
+    for campo in ("selected_hubs", "x_values", "alpha"):
         if campo not in solucao or solucao[campo] is None:
             raise ValueError(
                 f"Campo obrigatório '{campo}' ausente no dicionário da solução '{nome}'. "
@@ -223,7 +223,7 @@ def comparar_solucoes(solucao_t, solucao_ac, flow, distance,
     }
 
 
-def executar_comparacao(solucao_t, solucao_ac, alpha):
+def executar_comparacao(solucao_t, solucao_ac, alpha=None):
     _validar_solucao(solucao_t, "tradicional")
     _validar_solucao(solucao_ac, "aproximacao_continua")
 
@@ -236,7 +236,21 @@ def executar_comparacao(solucao_t, solucao_ac, alpha):
             "Os parâmetros das duas soluções não coincidem. "
             "Não é possível comparar soluções de instâncias diferentes."
         )
+    
+    alpha_t, alpha_ac = solucao_t["alpha"], solucao_ac["alpha"]
+    
+    if abs(alpha_t - alpha_ac) > EPS:
+        raise ValueError(
+            f"As soluções foram resolvidas com alphas diferentes "
+            f"(normal={alpha_t}, CA={alpha_ac}). Execute os dois modelos novamente "
+            f"com o mesmo alpha."
+        )
+    if alpha is not None and abs(alpha - alpha_t) > EPS:
+        raise ValueError(
+            f"O alpha informado ({alpha}) difere do alpha das soluções ({alpha_t})."
+        )
 
+    params = solucao_t["params"]
     params = solucao_t["params"]
 
     return comparar_solucoes(
@@ -248,7 +262,7 @@ def executar_comparacao(solucao_t, solucao_ac, alpha):
         d_acesso_ent=solucao_t["d_acesso_ent"],
         d_interno_col=solucao_t["d_interno_col"],
         d_interno_ent=solucao_t["d_interno_ent"],
-        alpha=alpha,
+        alpha=alpha_t,
         c_hub=params["c_hub"],   
         c=params["c_col"],          
     )

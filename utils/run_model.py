@@ -145,6 +145,7 @@ def run_model(
             "flow": flow,
             "distance": distance,
             "params": data["params"],
+            "alpha": float(alpha),
         }
     except Exception as error:
         return {
@@ -152,6 +153,7 @@ def run_model(
             "log": buffer.getvalue(),
             "error": str(error),
             "elapsed": time.perf_counter() - started,
+            "alpha": float(alpha),
         }
     finally:
         os.chdir(previous_cwd)

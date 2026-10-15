@@ -464,6 +464,9 @@ def main():
                 alpha=float(alpha),
                 time_limit=int(time_limit),
             )
+
+        result["alpha"] = float(alpha)
+
         st.session_state["last_result"] = result
         st.session_state["last_config"] = {
             "model_name": model_name,
@@ -474,7 +477,7 @@ def main():
             "time_limit": int(time_limit),
         }
         comparison_key = (
-            selected_instance["name"], int(n_limit), int(override_p),
+            selected_instance["name"], int(n_limit), int(override_p), float(alpha)
         )
         st.session_state.setdefault("model_results", {})[model_name] = {
             "result": result,
@@ -653,7 +656,7 @@ def main():
                 )
             model_labels = {"multiple_ca": "Multiple com CA", "multiple_normal": "Multiple normal"}
             current_key = (
-                selected_instance["name"], int(n_limit), int(override_p),
+                selected_instance["name"], int(n_limit), int(override_p), float(alpha)
             )
             comparable = {
                 name: item["result"]
@@ -1093,6 +1096,7 @@ def main():
                 selected_instance["name"],
                 int(n_limit),
                 int(override_p),
+                float(alpha)
             )
 
             comparable = {
@@ -1112,14 +1116,12 @@ def main():
                 solucao_t = comparable["multiple_normal"]
                 solucao_ac = comparable["multiple_ca"]
 
-                with st.spinner("Calculando indicadores de comparação..."):
-                    comparacao = executar_comparacao(
-                        solucao_t,
-                        solucao_ac,
-                        alpha=insights["alpha"]
-                    )
-
-                indicadores = comparacao
+                try:
+                    with st.spinner("Calculando indicadores de comparação..."):
+                        indicadores = executar_comparacao(solucao_t, solucao_ac)
+                except ValueError as error:
+                    st.error(str(error))
+                    return
 
                 # ---------------------------------------------------------
                 # Indicador 1 — Hubs comuns
