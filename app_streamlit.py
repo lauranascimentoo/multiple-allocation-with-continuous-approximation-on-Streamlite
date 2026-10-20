@@ -1214,16 +1214,16 @@ def main():
                 custo_rows = [
                     {
                         "modelo": "Multiple normal",
-                        "custo acesso": custo_t["custo_acesso"],
-                        "custo interno": custo_t["custo_interno"],
+                        "custo coleta": custo_t["custo_coleta"],
+                        "custo entrega": custo_t["custo_entrega"],
                         "custo inter-hub": custo_t["custo_inter_hub"],
                         "custo total": custo_t["custo_total"],
                         "custo por pacote": custo_t["custo_por_pacote"],
                     },
                     {
                         "modelo": "Multiple com CA",
-                        "custo acesso": custo_ac["custo_acesso"],
-                        "custo interno": custo_ac["custo_interno"],
+                        "custo coleta": custo_ac["custo_coleta"],
+                        "custo entrega": custo_ac["custo_entrega"],
                         "custo inter-hub": custo_ac["custo_inter_hub"],
                         "custo total": custo_ac["custo_total"],
                         "custo por pacote": custo_ac["custo_por_pacote"],
@@ -1234,8 +1234,8 @@ def main():
                     format_rows(
                         custo_rows,
                         [
-                            "custo acesso",
-                            "custo interno",
+                            "custo coleta",
+                            "custo entrega",
                             "custo inter-hub",
                             "custo total",
                             "custo por pacote",

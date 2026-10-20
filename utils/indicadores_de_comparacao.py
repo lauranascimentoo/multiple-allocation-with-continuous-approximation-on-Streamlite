@@ -92,80 +92,30 @@ def indicador4_distancia_acesso(x_values, flow, distance):
 # Indicador 5 — perfil de custos sob regra comum de avaliação (eq. 9-16)
 # ---------------------------------------------------------------------------
 
-def _oi_dj(flow):
-    """Oi = sum_j w_ij ; Dj = sum_i w_ij (eq. 10)"""
-    Oi, Dj = {}, {}
-    for (i, j), w in flow.items():
-        Oi[i] = Oi.get(i, 0.0) + w
-        Dj[j] = Dj.get(j, 0.0) + w
-    return Oi, Dj
+def indicador5_perfil_custos(x_values, flow, c_col, c_ent, c_hub_matrix):
+    """Avalia uma solução com as mesmas matrizes de custo do modelo M_AC.
+    c_col e c_ent já incluem o percurso interno e c_hub_matrix já inclui alpha,
+    então NÃO multiplicar por c ou alpha de novo."""
+    custo_coleta = 0.0
+    custo_entrega = 0.0
+    custo_inter_hub = 0.0
 
-def _custo_inter_hub(x_values, flow, distance, alpha, c_hub):
-    """Eq. 15, com Chub_km = c_hub * d_km (eq. 16)."""
-    total = 0.0
     for (i, j, k, m), xijkm in x_values.items():
-        wij = flow.get((i, j))
-        if wij is None:
-            raise ValueError(f"flow[{(i, j)}] ausente; necessário para o custo inter-hub.")
-        d_km = distance.get((k, m))
-        if d_km is None:
-            raise ValueError(f"distance[{(k, m)}] ausente; necessário para o custo inter-hub.")
-        total += wij * xijkm * alpha * (c_hub * d_km)
-    return total
+        fluxo_rota = flow[(i, j)] * xijkm
 
-def _custo_acesso(x_values, flow, d_acesso_col, d_acesso_ent, c, Oi, Dj):
-    """Eq. 12. d_acesso_col[(i,k)] e d_acesso_ent[(m,j)] já vêm com
-    2*d*R embutido (calculado no pipeline de geração da instância),
-    então NÃO multiplicar por 2 de novo aqui."""
-    total = 0.0
-    for (i, j, k, m), xijkm in x_values.items():
-        oi, dj = Oi.get(i, 0.0), Dj.get(j, 0.0)
-        if oi == 0 or dj == 0:
-            continue
-        wij = flow.get((i, j))
-        if wij is None:
-            raise ValueError(f"flow[{(i, j)}] ausente; necessário para o custo de acesso.")
-        d_ik = d_acesso_col.get((i, k))
-        d_mj = d_acesso_ent.get((m, j))
-        if d_ik is None or d_mj is None:
-            raise ValueError(f"d_acesso ausente para ({i},{k}) ou ({m},{j}); necessário para o custo de acesso.")
-        total += wij * xijkm * c * (d_ik / oi + d_mj / dj)
-    return total
+        custo_coleta += fluxo_rota * c_col[(i, k)]
+        custo_entrega += fluxo_rota * c_ent[(m, j)]
+        custo_inter_hub += fluxo_rota * c_hub_matrix[(k, m)]
 
-
-def _custo_interno(x_values, flow, d_interno_col, d_interno_ent, c, Oi, Dj):
-    """Eq. 14. d_interno_col[i] / d_interno_ent[j] já vêm com β√(A·N) embutido."""
-    total = 0.0
-    for (i, j, k, m), xijkm in x_values.items():
-        oi, dj = Oi.get(i, 0.0), Dj.get(j, 0.0)
-        if oi == 0 or dj == 0:
-            continue
-        d_i = d_interno_col.get(i)
-        d_j = d_interno_ent.get(j)
-        if d_i is None or d_j is None:
-            raise ValueError(f"d_interno ausente para a região {i} ou {j}; necessário para o custo interno.")
-        wij = flow.get((i, j))
-        if wij is None:
-            raise ValueError(f"flow[{(i, j)}] ausente; necessário para o custo interno.")
-        total += wij * xijkm * c * (d_i / oi + d_j / dj)
-    return total
-
-
-def indicador5_perfil_custos(x_values, flow, distance, alpha, c_hub, c,
-                              d_acesso_col, d_acesso_ent, d_interno_col, d_interno_ent):
-    Oi, Dj = _oi_dj(flow)
-    custo_acesso = _custo_acesso(x_values, flow, d_acesso_col, d_acesso_ent, c, Oi, Dj)
-    custo_interno = _custo_interno(x_values, flow, d_interno_col, d_interno_ent, c, Oi, Dj)
-    custo_inter_hub = _custo_inter_hub(x_values, flow, distance, alpha, c_hub)
-    custo_total = custo_acesso + custo_interno + custo_inter_hub
+    custo_total = custo_coleta + custo_entrega + custo_inter_hub
 
     soma_w = sum(flow.values())
     if soma_w == 0:
-        raise ValueError("Soma de flow[(i,j)] é zero; não é possível calcular o custo por pacote.")
+        raise ValueError("Soma dos fluxos é zero; custo por pacote indefinido.")
 
     return {
-        "custo_acesso": custo_acesso,
-        "custo_interno": custo_interno,
+        "custo_coleta": custo_coleta,
+        "custo_entrega": custo_entrega,
         "custo_inter_hub": custo_inter_hub,
         "custo_total": custo_total,
         "custo_por_pacote": custo_total / soma_w,
@@ -187,15 +137,15 @@ def indicador6_beneficio(cac_t, cac_ac):
 
 
 def comparar_solucoes(solucao_t, solucao_ac, flow, distance,
-                       d_acesso_col, d_acesso_ent, d_interno_col, d_interno_ent,
-                       alpha, c_hub, c):
+                       c_col, c_ent, c_hub_matrix):
     _validar_solucao(solucao_t, "tradicional")
     _validar_solucao(solucao_ac, "aproximacao_continua")
     _validar_obrigatorios(
-        flow=flow, distance=distance,
-        d_acesso_col=d_acesso_col, d_acesso_ent=d_acesso_ent,
-        d_interno_col=d_interno_col, d_interno_ent=d_interno_ent,
-        alpha=alpha, c_hub=c_hub, c=c,
+        flow=flow,
+        distance=distance,
+        c_col=c_col,
+        c_ent=c_ent,
+        c_hub_matrix=c_hub_matrix,
     )
 
     hubs_t, hubs_ac = solucao_t["selected_hubs"], solucao_ac["selected_hubs"]
@@ -203,10 +153,13 @@ def comparar_solucoes(solucao_t, solucao_ac, flow, distance,
 
     percentual_realocada, pares_alterados = indicador3_demanda_realocada(x_t, x_ac, flow)
 
-    perfil_t = indicador5_perfil_custos(x_t, flow, distance, alpha, c_hub, c,
-                                         d_acesso_col, d_acesso_ent, d_interno_col, d_interno_ent)
-    perfil_ac = indicador5_perfil_custos(x_ac, flow, distance, alpha, c_hub, c,
-                                          d_acesso_col, d_acesso_ent, d_interno_col, d_interno_ent)
+    perfil_t = indicador5_perfil_custos(
+        x_t, flow, c_col, c_ent, c_hub_matrix
+    )
+
+    perfil_ac = indicador5_perfil_custos(
+        x_ac, flow, c_col, c_ent, c_hub_matrix
+    )
 
     return {
         "indicador_1": {"hubs_comuns": indicador1_hubs_comuns(hubs_t, hubs_ac)},
@@ -250,19 +203,18 @@ def executar_comparacao(solucao_t, solucao_ac, alpha=None):
             f"O alpha informado ({alpha}) difere do alpha das soluções ({alpha_t})."
         )
 
-    params = solucao_t["params"]
-    params = solucao_t["params"]
+    for campo in ("flow", "c_col", "c_ent", "c_hub_matrix"):
+        if solucao_t[campo] != solucao_ac[campo]:
+            raise ValueError(
+                f"As soluções possuem dados diferentes em '{campo}'."
+            )
 
     return comparar_solucoes(
         solucao_t=solucao_t,
         solucao_ac=solucao_ac,
-        flow=solucao_t["flow"],           # <- vem da raiz do dict, não de params
-        distance=solucao_t["distance"],   # <- idem
-        d_acesso_col=solucao_t["d_acesso_col"],
-        d_acesso_ent=solucao_t["d_acesso_ent"],
-        d_interno_col=solucao_t["d_interno_col"],
-        d_interno_ent=solucao_t["d_interno_ent"],
-        alpha=alpha_t,
-        c_hub=params["c_hub"],   
-        c=params["c_col"],          
+        flow=solucao_ac["flow"],
+        distance=solucao_ac["distance"],
+        c_col=solucao_ac["c_col"],
+        c_ent=solucao_ac["c_ent"],
+        c_hub_matrix=solucao_ac["c_hub_matrix"],
     )
