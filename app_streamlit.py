@@ -1257,5 +1257,32 @@ def main():
                     f"{format_br(beneficio, 4)}%",
                 )
 
+                #---------------------------------------------------------
+                # Indicador 7 — Tempo de solução e gap
+                #---------------------------------------------------------
+                st.markdown("### 7. Tempo de solução e gap")
+            
+                tempo_t = indicadores["indicador_7"]["tradicional"]
+                tempo_ac = indicadores["indicador_7"]["aproximacao_continua"]
+
+                tempo_rows = [
+                    {
+                        "modelo": "Multiple normal",
+                        "tempo de solução": tempo_t["tempo"],
+                        "gap": format_percent_br(tempo_t["gap"]),
+                    },
+                    {
+                        "modelo": "Multiple com CA",
+                        "tempo de solução": tempo_ac["tempo"],
+                        "gap": format_percent_br(tempo_ac["gap"]),
+                    },
+                ]
+
+                st.dataframe(
+                    format_rows(tempo_rows, ["tempo de solução"]),
+                    width="stretch",
+                    hide_index=True,
+                )
+
 if __name__ == "__main__":
     main()

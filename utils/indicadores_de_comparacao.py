@@ -132,6 +132,15 @@ def indicador6_beneficio(cac_t, cac_ac):
 
 
 # ---------------------------------------------------------------------------
+# Indicador 7 — benefício da solução AC (eq. 18)
+# ---------------------------------------------------------------------------
+
+def indicador7_tempo_gap(solucao_t, solucao_ac):
+    return {
+        "tradicional": {"tempo": solucao_t["runtime"], "gap": solucao_t["gap"]},
+        "aproximacao_continua": {"tempo": solucao_ac["runtime"], "gap": solucao_ac["gap"]},
+    }
+# ---------------------------------------------------------------------------
 # Função principal
 # ---------------------------------------------------------------------------
 
@@ -173,6 +182,7 @@ def comparar_solucoes(solucao_t, solucao_ac, flow, distance,
         "indicador_6": {
             "beneficio_percentual": indicador6_beneficio(perfil_t["custo_total"], perfil_ac["custo_total"])
         },
+        "indicador_7": indicador7_tempo_gap(solucao_t, solucao_ac),
     }
 
 
