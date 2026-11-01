@@ -94,7 +94,7 @@ def _solve_multiple_allocation_p_hub(
             for k in nodes
             for m in nodes
         ]
-        x.update(mdl.addVars(batch_keys, vtype=GRB.BINARY, name="x"))
+        x.update(mdl.addVars(batch_keys, vtype=GRB.CONTINUOUS, name="x")) # vtype=GRB.CONTINUOUS
 
     # Restricao 1: abrir exatamente p hubs.
     remaining_time("criacao_restricoes")
