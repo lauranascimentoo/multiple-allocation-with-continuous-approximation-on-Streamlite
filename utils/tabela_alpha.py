@@ -1,19 +1,8 @@
-"""Gera a tabela de resultados por alpha em duas versões:
-
-- "sem_alpha2": c_hub (já com alpha) entra uma única vez no objetivo.
-- "com_alpha2": alpha multiplica c_hub de novo nos dois modelos (alpha ao quadrado),
-  como era antes do commit 60f226c. A avaliação C_AC usa a mesma matriz do M_AC.
-
-Uso (a partir da raiz do projeto):
-    python -m utils.tabela_alpha
-"""
 
 import csv
 import sys
-from math import isclose
 
 import multiple_allocation_normal
-from gurobipy import GRB
 from configs.paths import OUTPUTS_DIR
 from utils import run_model as run_model_module
 from utils.indicadores_de_comparacao import executar_comparacao
@@ -24,78 +13,178 @@ N_LIMIT = 11
 P = 5
 TIME_LIMIT = 300
 
-_solver_original = run_model_module.solve_multiple_allocation_p_hub
+
+def _status(solucao):
+    from gurobipy import GRB
+
+    return {
+        GRB.OPTIMAL: "Ótimo",
+        GRB.TIME_LIMIT: "Limite de tempo",
+    }.get(solucao["model_status"], f"Status {solucao['model_status']}")
 
 
-def _solver_alpha2(**kwargs):
-    kwargs["c_hub"] = {k: kwargs["alpha"] * v for k, v in kwargs["c_hub"].items()}
-    return _solver_original(**kwargs)
-
-
-def _executar(alpha, alpha2):
-    solver = _solver_alpha2 if alpha2 else _solver_original
-    run_model_module.solve_multiple_allocation_p_hub = solver
-    multiple_allocation_normal.solve_multiple_allocation_p_hub = solver
-
+def executar(alpha):
     resultados = {}
+
     for modelo in ("multiple_normal", "multiple_ca"):
         resultados[modelo] = run_model_module.run_model(
-            model_name=modelo, instance=INSTANCE, n_limit=N_LIMIT,
-            override_p=P, alpha=alpha, time_limit=TIME_LIMIT,
+            model_name=modelo,
+            instance=INSTANCE,
+            n_limit=N_LIMIT,
+            override_p=P,
+            alpha=alpha,
+            time_limit=TIME_LIMIT,
         )
-        if not resultados[modelo]["ok"]:
-            raise RuntimeError(f"alpha={alpha} {modelo}: {resultados[modelo].get('error') or 'sem solução ótima'}")
 
-    if alpha2:
-        for r in resultados.values():
-            r["c_hub_matrix"] = {k: alpha * v for k, v in r["c_hub_matrix"].items()}
+        if not resultados[modelo]["ok"]:
+            raise RuntimeError(
+                f"alpha={alpha}, modelo={modelo}: "
+                f"{resultados[modelo].get('error') or 'sem solução válida'}"
+            )
+
     return resultados["multiple_normal"], resultados["multiple_ca"]
 
 
-def _status(solucao):
-    return {GRB.OPTIMAL: "Ótimo", GRB.TIME_LIMIT: "Limite de tempo"}.get(
-        solucao["model_status"], f"Status {solucao['model_status']}"
-    )
-
-
-def gerar(alpha2):
+def gerar():
     linhas = []
+
     for alpha in ALPHAS:
-        sol_t, sol_ac = _executar(alpha, alpha2)
-        ind = executar_comparacao(sol_t, sol_ac)["indicador_5"]
-        c_st = ind["tradicional"]["custo_total"]
-        c_sac = ind["aproximacao_continua"]["custo_total"]
-        confere = isclose(c_sac, sol_ac["objective"], rel_tol=1e-9, abs_tol=1e-4)
-        linhas.append({
+        print(f"\nExecutando alpha = {alpha}...")
+
+        sol_t, sol_ac = executar(alpha)
+
+        ind = executar_comparacao(sol_t, sol_ac, alpha=alpha)
+
+        # Indicador 1: Hubs coincidentes
+        i1 = ind["indicador_1"]["hubs_comuns"]
+
+        # Indicador 2: Índice de Jaccard
+        i2 = ind["indicador_2"]["jaccard"]
+
+        # Indicador 3: Demanda realocada
+        i3 = ind["indicador_3"]
+
+        # Indicador 4: Distâncias médias de acesso
+        i4_t = ind["indicador_4"]["tradicional"]
+        i4_ac = ind["indicador_4"]["aproximacao_continua"]
+
+        # Indicador 5: Perfil de custos
+        i5_t = ind["indicador_5"]["tradicional"]
+        i5_ac = ind["indicador_5"]["aproximacao_continua"]
+
+        # Indicador 6: Benefício percentual
+        i6 = ind["indicador_6"]["beneficio_percentual"]
+
+        # Indicador 7: Tempo e gap
+        i7_t = ind["indicador_7"]["tradicional"]
+        i7_ac = ind["indicador_7"]["aproximacao_continua"]
+
+        linha = {
             "alpha": alpha,
-            "C_AC(S_T)": c_st,
-            "C_AC(S_AC)": c_sac,
-            "B_AC (%)": 100.0 * (c_st - c_sac) / c_st,
-            "Função objetivo T": sol_t["objective"],
-            "Função objetivo AC": sol_ac["objective"],
-            "tempo T (s)": sol_t["runtime"],
-            "tempo AC (s)": sol_ac["runtime"],
-            "status T": _status(sol_t),
-            "status AC": _status(sol_ac),
-            "gap T (%)": 100 * sol_t["gap"],
-            "gap AC (%)": 100 * sol_ac["gap"],
-            "C_AC(S_AC)==obj AC": confere,
-        })
+
+            # Indicador 1
+            "I1 - Hubs comuns": i1,
+
+            # Indicador 2
+            "I2 - Jaccard": i2,
+
+            # Indicador 3
+            "I3 - Demanda realocada (%)": i3["percentual_realocada"],
+            "I3 - Pares alterados": i3["pares_alterados"],
+
+            # Indicador 4
+            "I4 - Distância coleta T": i4_t["distancia_coleta"],
+            "I4 - Distância entrega T": i4_t["distancia_entrega"],
+            "I4 - Distância total T": i4_t["distancia_total"],
+
+            "I4 - Distância coleta AC": i4_ac["distancia_coleta"],
+            "I4 - Distância entrega AC": i4_ac["distancia_entrega"],
+            "I4 - Distância total AC": i4_ac["distancia_total"],
+
+            # Indicador 5
+            "I5 - Custo coleta T": i5_t["custo_coleta"],
+            "I5 - Custo entrega T": i5_t["custo_entrega"],
+            "I5 - Custo inter-hub T": i5_t["custo_inter_hub"],
+            "I5 - Custo total T": i5_t["custo_total"],
+            "I5 - Custo por pacote T": i5_t["custo_por_pacote"],
+
+            "I5 - Custo coleta AC": i5_ac["custo_coleta"],
+            "I5 - Custo entrega AC": i5_ac["custo_entrega"],
+            "I5 - Custo inter-hub AC": i5_ac["custo_inter_hub"],
+            "I5 - Custo total AC": i5_ac["custo_total"],
+            "I5 - Custo por pacote AC": i5_ac["custo_por_pacote"],
+
+            # Indicador 6
+            "I6 - Benefício AC (%)": i6,
+
+            # Indicador 7
+            "I7 - Tempo T (s)": i7_t["tempo"],
+            "I7 - Gap T (%)": 100 * i7_t["gap"],
+            "I7 - Tempo AC (s)": i7_ac["tempo"],
+            "I7 - Gap AC (%)": 100 * i7_ac["gap"],
+
+            # Informações complementares dos modelos
+            "Objetivo T": sol_t["objective"],
+            "Objetivo AC": sol_ac["objective"],
+            "Status T": _status(sol_t),
+            "Status AC": _status(sol_ac),
+        }
+
+        linhas.append(linha)
+
+        print(
+            f"Alpha {alpha}: "
+            f"I1={i1}, "
+            f"I2={i2:.4f}, "
+            f"I3={i3['percentual_realocada']:.4f}%, "
+            f"I6={i6:.4f}%"
+        )
+
     return linhas
 
 
 def main():
     OUTPUTS_DIR.mkdir(exist_ok=True)
-    for nome, alpha2 in (("sem_alpha2", False), ("com_alpha2", True)):
-        linhas = gerar(alpha2)
-        caminho = OUTPUTS_DIR / f"tabela_alpha_{nome}.csv"
-        with open(caminho, "w", newline="", encoding="utf-8-sig") as f:
-            w = csv.DictWriter(f, fieldnames=list(linhas[0]), delimiter=";")
-            w.writeheader()
-            w.writerows(linhas)
-        print(f"\n== {nome} -> {caminho}")
-        for l in linhas:
-            print({k: (round(v, 4) if isinstance(v, float) else v) for k, v in l.items()})
+
+    linhas = gerar()
+
+    caminho = OUTPUTS_DIR / "tabela_alpha_indicadores.csv"
+
+    with open(caminho, "w", newline="", encoding="utf-8-sig") as arquivo:
+        writer = csv.DictWriter(
+            arquivo,
+            fieldnames=list(linhas[0].keys()),
+            delimiter=";",
+        )
+
+        writer.writeheader()
+
+        for linha in linhas:
+            linha_formatada = {
+                k: (
+                    round(v, 4)
+                    if isinstance(v, float)
+                    else v
+                )
+                for k, v in linha.items()
+            }
+
+            writer.writerow({
+                k: (
+                    f"{v:.4f}".replace(".", ",")
+                    if isinstance(v, float)
+                    else v
+                )
+                for k, v in linha_formatada.items()
+            })
+
+
+    print(f"\n{'=' * 60}")
+    print("TABELA DE INDICADORES GERADA")
+    print(f"Arquivo: {caminho}")
+    print(f"Quantidade de alphas: {len(linhas)}")
+    print(f"Quantidade de indicadores: 7")
+    print(f"{'=' * 60}")
 
 
 if __name__ == "__main__":
