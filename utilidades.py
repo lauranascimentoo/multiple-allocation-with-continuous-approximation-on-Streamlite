@@ -84,10 +84,10 @@ def load_sp_instance(file_path, n_limit=None, override_p=None, alpha=0.75):
         if i != j and original_flow_matrix[(i, j)] > 0
     }
     c_col_matrix = {(i, k): original_c_col[(i, k)] for i in nodes for k in nodes}
-    c_ent_matrix = {(k, j): original_c_ent[(k, j)] for k in nodes for j in nodes}
+    c_ent_matrix = {(k, j): original_c_ent[(j, k)] for k in nodes for j in nodes}
 
     d_acesso_col_matrix = {(i, k): original_d_acesso_col[(i, k)] for i in nodes for k in nodes}
-    d_acesso_ent_matrix = {(k, j): original_d_acesso_ent[(k, j)] for k in nodes for j in nodes}
+    d_acesso_ent_matrix = {(k, j): original_d_acesso_ent[(j, k)] for k in nodes for j in nodes}
 
     d_interno_col_por_regiao = {i: original_d_interno_col[(i, i)] for i in nodes}
     d_interno_ent_por_regiao = {j: original_d_interno_ent[(j, j)] for j in nodes}
